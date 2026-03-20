@@ -1,0 +1,13 @@
+# Scripts temporal/debug files
+*.log
+/tmp/yt-dlp-temp
+
+# Music related files (don't version control your music folder)
+*.mp3
+*.url
+archive.txt
+
+# OS-specific files
+*Zone.Identifier
+.DS_Store
+Thumbs.db
