@@ -6,6 +6,11 @@ import subprocess
 import sys
 from pathlib import Path
 
+# Constants
+COOKIES_FILE = Path(__file__).parent / "music.youtube.com_cookies.txt"
+if not COOKIES_FILE.exists():
+    COOKIES_FILE = Path.home() / "cookies.txt"
+
 def check_dependencies():
     """Check if required external tools are installed."""
     # First check for python modules
@@ -28,33 +33,78 @@ def check_dependencies():
             print(f"Error: yt-dlp must be installed or available in your environment.")
             sys.exit(1)
 
+def extract_video_id(mp3_file):
+    """Worker function to extract video_id using ffprobe."""
+    try:
+        import re
+        cmd = [
+            'ffprobe', '-v', 'quiet', 
+            '-show_entries', 'format_tags=comment', 
+            '-of', 'json', str(mp3_file)
+        ]
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        if result.returncode == 0:
+            data = json.loads(result.stdout)
+            comment = data.get('format', {}).get('tags', {}).get('comment', '')
+            match = re.search(r'video_id=([^ ]*)', comment)
+            if match:
+                return mp3_file.name, match.group(1)
+    except Exception:
+        pass
+    return mp3_file.name, None
+
 def get_folder_ids(music_dir):
-    """Extract video IDs from MP3 files in the specified directory."""
+    """Extract video IDs from MP3 files using a persistent cache and multiprocessing."""
     folder_ids = {}  # {video_id: filename}
     if not music_dir.is_dir():
         print(f"Error: Directory {music_dir} does not exist.")
         sys.exit(1)
 
-    print(f"Extrayendo IDs de video de la carpeta {music_dir}...")
-    for mp3_file in music_dir.glob("*.mp3"):
+    print(f"Escaneando carpeta {music_dir}...")
+    
+    # Persistence cache
+    cache_file = music_dir / ".metadata_cache.json"
+    cache = {}
+    if cache_file.exists():
         try:
-            cmd = [
-                'ffprobe', '-v', 'quiet', 
-                '-show_entries', 'format_tags=comment', 
-                '-of', 'json', str(mp3_file)
-            ]
-            result = subprocess.run(cmd, capture_output=True, text=True)
-            if result.returncode == 0:
-                data = json.loads(result.stdout)
-                comment = data.get('format', {}).get('tags', {}).get('comment', '')
-                # Extract video_id=...
-                import re
-                match = re.search(r'video_id=([^ ]*)', comment)
-                if match:
-                    video_id = match.group(1)
-                    folder_ids[video_id] = mp3_file.stem
-        except Exception as e:
-            print(f"Error procesando {mp3_file.name}: {e}")
+            cache = json.loads(cache_file.read_text())
+        except: pass
+        
+    new_cache = {}
+    files_to_scan = []
+    
+    # 1. Identify what needs scanning
+    all_mp3s = list(music_dir.glob("*.mp3"))
+    for mp3 in all_mp3s:
+        rel_name = mp3.name
+        mtime = str(mp3.stat().st_mtime)
+        
+        if rel_name in cache and cache[rel_name].get('mtime') == mtime:
+            v_id = cache[rel_name].get('video_id')
+            if v_id:
+                folder_ids[v_id] = mp3.stem
+                new_cache[rel_name] = {'video_id': v_id, 'mtime': mtime}
+        else:
+            files_to_scan.append(mp3)
+            
+    # 2. Parallel scan for missing IDs
+    if files_to_scan:
+        from concurrent.futures import ProcessPoolExecutor
+        print(f"Extrayendo IDs de {len(files_to_scan)} archivos nuevos o modificados...")
+        with ProcessPoolExecutor() as executor:
+            results = list(executor.map(extract_video_id, files_to_scan))
+            
+        for filename, v_id in results:
+            if v_id:
+                folder_ids[v_id] = Path(filename).stem
+                mtime = str((music_dir / filename).stat().st_mtime)
+                new_cache[filename] = {'video_id': v_id, 'mtime': mtime}
+    
+    # Save updated cache
+    if new_cache != cache:
+        try:
+            cache_file.write_text(json.dumps(new_cache, indent=2))
+        except: pass
     
     return folder_ids
 
@@ -63,12 +113,12 @@ def get_playlist_ids(url, cookies_file=None):
     playlist_ids = {}  # {video_id: title}
     print("Extrayendo IDs y títulos de la playlist...")
     
-    # Convert music.youtube.com to youtube.com
-    url = url.replace("music.youtube.com", "youtube.com")
+    # Use original URL to preserve music-specific metadata extraction
+    pass
     
     cmd = YT_DLP_CMD + ['--dump-json', '--flat-playlist', '--no-download', url]
-    if cookies_file and cookies_file.exists():
-        cmd.extend(['--cookies', str(cookies_file)])
+    if COOKIES_FILE.exists():
+        cmd.extend(['--cookies', str(COOKIES_FILE)])
         
     try:
         # yt-dlp returns one JSON object per line for flat-playlist dump-json
@@ -105,10 +155,9 @@ def main():
     check_dependencies()
     
     music_dir = Path.home() / "musica" / args.folder
-    cookies_file = Path.home() / "cookies.txt"
     
     folder_ids = get_folder_ids(music_dir)
-    playlist_ids = get_playlist_ids(args.url, cookies_file)
+    playlist_ids = get_playlist_ids(args.url)
     
     matches = []
     in_playlist_not_folder = []

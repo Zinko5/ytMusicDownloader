@@ -24,3 +24,7 @@ venv/
 .venv/
 __pycache__/
 *.pyc
+
+# Sensitive data
+*cookies.txt
+.metadata_cache.json

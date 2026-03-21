@@ -14,6 +14,8 @@ Una colección de potentes scripts en Bash para descargar, organizar y sincroniz
 - **Gestión de Duplicados**:
   - Evita re-descargar canciones comparando el ID del video incrustado en los archivos locales.
   - Manejo inteligente de nombres de archivo idénticos (añade numeración automática como `(1)`, `(2)` sin conflictos).
+- **Compatibilidad Extrema (Android/Musicolet)**: Fuerza el uso de etiquetas **ID3v2.3**, asegurando que los títulos con acentos o caracteres especiales se vean perfectos en reproductores móviles.
+- **Sistema de Reintento Inteligente (Híbrido)**: El script utiliza tus cookies para acceder a contenido privado, pero si detecta un bloqueo de firma de YouTube, reintenta automáticamente de forma anónima para garantizar el éxito de la descarga.
 - **Sincronización y Comparación**: Herramienta para comparar tu biblioteca local con cualquier playlist online para detectar archivos faltantes.
 
 ---
@@ -25,7 +27,8 @@ Asegúrate de tener instaladas las siguientes herramientas en tu sistema Linux:
 - **[yt-dlp](https://github.com/yt-dlp/yt-dlp)**: El motor de descarga.
 - **FFmpeg**: Para la conversión de audio y procesamiento de imágenes.
 - **curl**: Para la descarga de miniaturas.
-- **jq**: Para el procesamiento de metadatos en formato JSON.
+- **Node.js**: Requerido por `yt-dlp` para resolver desafíos de firmas y bot-protection de YouTube.
+- **Python 3.8+**: Requerido para ejecutar los scripts `.py`.
 
 ```bash
 # Ejemplo de instalación en Debian/Ubuntu
@@ -102,6 +105,7 @@ python3 comparar_playlist.py "<URL_YOUTUBE_MUSIC>" "[nombre_carpeta]"
 
 ## 📝 Notas Técnicas
 - El script utiliza un **comentario de metadatos** especial (`video_id=...`) para rastrear el origen de cada archivo. Esto permite mover o renombrar los archivos sin que el script crea que debe descargarlos de nuevo.
+- **Uso de Cookies**: Si tienes un archivo `music.youtube.com_cookies.txt` en la carpeta del proyecto, el script lo usará automáticamente para acceder a tus playlists privadas.
 - Las portadas se procesan en `/tmp/` para no dejar residuos en tu carpeta de música.
 
 ---
