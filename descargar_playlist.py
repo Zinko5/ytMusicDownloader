@@ -154,19 +154,67 @@ class MusicDownloader:
                     self.filename_counts[low_title] = 0
 
                 # 3. Download thumbnail & crop
-                thumb_url = metadata.get('thumbnail')
+                thumbnails = metadata.get('thumbnails', [])
+                thumb_url = None
+                
+                # Logic to find the best square thumbnail or highest res one
+                # Filter for square-ish thumbnails first (width == height)
+                square_thumbs = [t for t in thumbnails if t.get('width') == t.get('height') and t.get('width', 0) > 0]
+                if square_thumbs:
+                    # Pick the one with the highest width
+                    best_square = max(square_thumbs, key=lambda t: t.get('width', 0))
+                    thumb_url = best_square.get('url')
+                    print(f"Usando miniatura cuadrada oficial: {best_square.get('width')}x{best_square.get('height')}")
+                else:
+                    # Fallback to the largest thumbnail available
+                    if thumbnails:
+                        best_thumb = max(thumbnails, key=lambda t: t.get('width', 0) * t.get('height', 0))
+                        thumb_url = best_thumb.get('url')
+                    else:
+                        thumb_url = metadata.get('thumbnail')
+
                 thumb_file = TEMP_DIR / f"{video_id}.jpg"
+                thumb_square = TEMP_DIR / f"{video_id}_square.jpg"
+
                 if thumb_url:
+                    # Download thumbnail
                     subprocess.run(['curl', '-s', thumb_url, '-o', str(thumb_file)], check=True)
-                    # ffprobe to get min dimension for crop
+                    
+                    # Get dimensions
                     probe_cmd = ['ffprobe', '-v', 'quiet', '-show_entries', 'stream=width,height', '-of', 'json', str(thumb_file)]
                     probe_res = subprocess.run(probe_cmd, capture_output=True, text=True)
                     dim_data = json.loads(probe_res.stdout)
-                    w = dim_data['streams'][0]['width']
-                    h = dim_data['streams'][0]['height']
-                    min_dim = min(w, h)
-                    thumb_square = TEMP_DIR / f"{video_id}_square.jpg"
-                    subprocess.run(['ffmpeg', '-i', str(thumb_file), '-vf', f'crop={min_dim}:{min_dim}', str(thumb_square), '-y'], capture_output=True)
+                    
+                    if 'streams' in dim_data and len(dim_data['streams']) > 0:
+                        w = dim_data['streams'][0]['width']
+                        h = dim_data['streams'][0]['height']
+                        
+                        # If it's already a square, just copy it
+                        if w == h:
+                            shutil.copy(str(thumb_file), str(thumb_square))
+                        else:
+                            # Use cropdetect to find the actual content (removes black/colored bars)
+                            # We use a threshold of 60 to catch near-black or colored padding
+                            crop_cmd = ['ffmpeg', '-i', str(thumb_file), '-vf', 'cropdetect=limit=60:round=2', '-t', '1', '-f', 'null', '-']
+                            crop_res = subprocess.run(crop_cmd, capture_output=True, text=True)
+                            match = re.search(r'crop=(\d+:\d+:\d+:\d+)', crop_res.stderr)
+                            
+                            if match:
+                                crop_params = match.group(1)
+                                cw, ch, cx, cy = map(int, crop_params.split(':'))
+                                # We found the content, now make it a square within that content
+                                c_min = min(cw, ch)
+                                fx = cx + (cw - c_min) // 2
+                                fy = cy + (ch - c_min) // 2
+                                print(f"Bordes detectados. Recortando de {w}x{h} a {c_min}x{c_min}")
+                                subprocess.run(['ffmpeg', '-i', str(thumb_file), '-vf', f'crop={c_min}:{c_min}:{fx}:{fy}', str(thumb_square), '-y'], capture_output=True)
+                            else:
+                                # Fallback to standard center crop
+                                min_dim = min(w, h)
+                                subprocess.run(['ffmpeg', '-i', str(thumb_file), '-vf', f'crop={min_dim}:{min_dim}:(iw-{min_dim})/2:(ih-{min_dim})/2', str(thumb_square), '-y'], capture_output=True)
+                    else:
+                        # Failback if ffprobe fails
+                        shutil.copy(str(thumb_file), str(thumb_square))
 
                 # 4. Download audio
                 temp_output = TEMP_DIR / f"{video_id}.mp3"
@@ -237,7 +285,7 @@ def main():
     downloader = MusicDownloader(music_dir)
     downloader.build_cache()
     
-    url = args.url.replace("music.youtube.com", "youtube.com")
+    url = args.url
     
     if "list=" in url:
         print("Obteniendo URLs de la playlist...")
