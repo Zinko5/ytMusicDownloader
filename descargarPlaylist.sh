@@ -170,14 +170,28 @@ process_video() {
             filename_counts[$lowercase_title]=0
         fi
 
-        # Download thumbnail and convert to square 1x1
-        thumbnail_url=$(echo "$metadata" | jq -r '.thumbnail')
+        # Prefer high-resolution square thumbnails from metadata if available
+        thumbnail_url=$(echo "$metadata" | jq -r '
+            [ .thumbnails[] | select(.width == .height) ] | 
+            sort_by(.width) | last | .url // empty
+        ')
+        if [ -z "$thumbnail_url" ] || [ "$thumbnail_url" == "null" ]; then
+            thumbnail_url=$(echo "$metadata" | jq -r '.thumbnail')
+        fi
+
         thumbnail_file="$TEMP_DIR/$video_id.jpg"
         curl -s "$thumbnail_url" -o "$thumbnail_file"
         if [ -f "$thumbnail_file" ]; then
-            # Get dimensions and crop to square
-            dimensions=$(ffprobe -v quiet -show_entries stream=width,height -of json "$thumbnail_file" | jq -r '.streams[0] | [.width, .height] | min')
-            ffmpeg -i "$thumbnail_file" -vf "crop=$dimensions:$dimensions" "$TEMP_DIR/$video_id_square.jpg" -y 2>/dev/null
+            # Detect dimensions and crop to square, using cropdetect to remove borders if necessary
+            detect_crop=$(ffmpeg -i "$thumbnail_file" -vf "cropdetect=24:16:0" -f null - 2>&1 | grep -oP '(?<=crop=)[0-9:]+' | tail -n1)
+            if [ -n "$detect_crop" ]; then
+                # Use detected crop as basis, then ensure it's square
+                ffmpeg -i "$thumbnail_file" -vf "crop=$detect_crop,crop='min(iw,ih)':'min(iw,ih)'" "$TEMP_DIR/$video_id_square.jpg" -y 2>/dev/null
+            else
+                # Fallback to simple center-square crop
+                dimensions=$(ffprobe -v quiet -show_entries stream=width,height -of json "$thumbnail_file" | jq -r '.streams[0] | [.width, .height] | min')
+                ffmpeg -i "$thumbnail_file" -vf "crop=$dimensions:$dimensions" "$TEMP_DIR/$video_id_square.jpg" -y 2>/dev/null
+            fi
         fi
 
         # Use video ID as temporary filename to avoid special character issues
