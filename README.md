@@ -55,7 +55,12 @@ sudo apt update && sudo apt install ffmpeg curl jq
 ### 1. Descargando Música
 El script principal descarga el audio en máxima calidad (320kbps/V0) y organiza los archivos en carpetas dentro de `~/musica/`.
 
-**Sintaxis:**
+**Sintaxis (Python - Recomendado):**
+```bash
+python3 descargar_playlist.py "<URL_YOUTUBE_MUSIC>" "[nombre_carpeta]"
+```
+
+**Sintaxis (Bash):**
 ```bash
 ./descargarPlaylist.sh "<URL_YOUTUBE_MUSIC>" "[nombre_carpeta]"
 ```
@@ -65,13 +70,18 @@ El script principal descarga el audio en máxima calidad (320kbps/V0) y organiza
 
 **Ejemplo:**
 ```bash
-./descargarPlaylist.sh "https://music.youtube.com/playlist?list=XXX" "MisFavoritos"
+python3 descargar_playlist.py "https://music.youtube.com/playlist?list=XXX" "MisFavoritos"
 ```
 
 ### 2. Comparando Biblioteca Local
 Si quieres saber qué canciones te faltan de una playlist o qué canciones tienes de más, usa el script de comparación.
 
-**Sintaxis:**
+**Sintaxis (Python - Recomendado):**
+```bash
+python3 comparar_playlist.py "<URL_YOUTUBE_MUSIC>" "[nombre_carpeta]"
+```
+
+**Sintaxis (Bash):**
 ```bash
 ./compararPlaylist.sh "<URL_YOUTUBE_MUSIC>" "[nombre_carpeta]"
 ```

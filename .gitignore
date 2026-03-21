@@ -11,3 +11,9 @@ archive.txt
 *Zone.Identifier
 .DS_Store
 Thumbs.db
+
+# Virtual environments
+venv/
+.venv/
+__pycache__/
+*.pyc
