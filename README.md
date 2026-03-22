@@ -1,112 +1,71 @@
 # 🎵 ytMusicDownloader
 
-[![Bash](https://img.shields.io/badge/Language-Bash-4EAA25.svg)](https://www.gnu.org/software/bash/)
-[![yt--dlp](https://img.shields.io/badge/Dependency-yt--dlp-FF0000.svg)](https://github.com/yt-dlp/yt-dlp)
+[![Python](https://img.shields.io/badge/Language-Python-3776AB.svg)](https://www.python.org/)
+[![yt-dlp](https://img.shields.io/badge/Dependency-yt--dlp-FF0000.svg)](https://github.com/yt-dlp/yt-dlp)
 [![FFmpeg](https://img.shields.io/badge/Dependency-FFmpeg-007800.svg)](https://ffmpeg.org/)
 
-Una colección de potentes scripts en Bash para descargar, organizar y sincronizar música desde **YouTube Music** con un enfoque en la calidad de los metadatos y la gestión inteligente de archivos.
+Una colección de herramientas en **Python** para descargar, organizar y sincronizar música desde **YouTube Music** con un enfoque en la calidad de los metadatos y la gestión inteligente de archivos.
+
+> [!NOTE]
+> Este repositorio ha sido migrado de Bash a Python para ofrecer un mejor rendimiento (multiprocesamiento) y una gestión de errores más robusta. Los scripts originales en Bash se mantienen en la carpeta `bash/` de forma secundaria.
 
 ## ✨ Características Principales
 
-- **Descarga Inteligente**: Soporte para listas de reproducción completas o canciones individuales.
-- **Metadatos Enriquecidos**: Incrusta automáticamente título, artista y un comentario con el `video_id` persistente.
-- **Portadas Cuadradas (1:1)**: A diferencia de otros descargadores, este script descarga la miniatura, la recorta a formato cuadrado (álbum) usando FFmpeg y la incrusta en el MP3.
-- **Gestión de Duplicados**:
-  - Evita re-descargar canciones comparando el ID del video incrustado en los archivos locales.
-  - Manejo inteligente de nombres de archivo idénticos (añade numeración automática como `(1)`, `(2)` sin conflictos).
-- **Compatibilidad Extrema (Android/Musicolet)**: Fuerza el uso de etiquetas **ID3v2.3**, asegurando que los títulos con acentos o caracteres especiales se vean perfectos en reproductores móviles.
-- **Sistema de Reintento Inteligente (Híbrido)**: El script utiliza tus cookies para acceder a contenido privado, pero si detecta un bloqueo de firma de YouTube, reintenta automáticamente de forma anónima para garantizar el éxito de la descarga.
-- **Sincronización y Comparación**: Herramienta para comparar tu biblioteca local con cualquier playlist online para detectar archivos faltantes.
-
----
+- **Descarga Inteligente (Python)**: Soporte para listas de reproducción completas o canciones individuales usando multiprocesamiento para escanear la biblioteca de forma ultrarrápida.
+- **Metadatos Enriquecidos**: Incrusta automáticamente título, artista y un comentario con el `video_id` persistente para evitar duplicados.
+- **Portadas Cuadradas (1:1)**: Descarga la mejor miniatura disponible (maxresdefault), la recorta a formato cuadrado (álbum) y la incrusta en el MP3.
+- **Gestión de Duplicados**: 
+  - Compara el ID del video incrustado en los metadatos, permitiendo renombrar archivos sin perder el rastreo.
+  - Manejo inteligente de colisiones de nombres (añade numeración automática sin conflictos).
+- **Compatibilidad Extrema (ID3v2.3)**: Asegura que las etiquetas se vean perfectas en reproductores Android/Musicolet.
+- **Sincronización Avanzada**: Herramienta de auditoría para comparar tu carpeta local con cualquier playlist online.
 
 ## 🛠️ Requisitos
 
-Asegúrate de tener instaladas las siguientes herramientas en tu sistema Linux:
+Asegúrate de tener instaladas las siguientes herramientas:
 
+- **Python 3.8+** (Recomendado)
 - **[yt-dlp](https://github.com/yt-dlp/yt-dlp)**: El motor de descarga.
-- **FFmpeg**: Para la conversión de audio y procesamiento de imágenes.
-- **curl**: Para la descarga de miniaturas.
-- **Node.js**: Requerido por `yt-dlp` para resolver desafíos de firmas y bot-protection de YouTube.
-- **Python 3.8+**: Requerido para ejecutar los scripts `.py`.
+- **FFmpeg**: Para el procesamiento de audio e imágenes.
+- **Node.js**: Requerido por `yt-dlp` para resolver desafíos de bot-protection.
 
 ```bash
-# Ejemplo de instalación en Debian/Ubuntu
-sudo apt update && sudo apt install ffmpeg curl jq
-# Para yt-dlp se recomienda seguir las instrucciones oficiales de su repo
+# Instalación de dependencias (Debian/Ubuntu)
+sudo apt update && sudo apt install ffmpeg curl nodejs
+pip install yt-dlp
 ```
 
----
+## 🚀 Modo de Uso
 
-## 🚀 Instalación y Configuración
+### 1. Descargando Música (Recomendado)
+El programa principal descarga el audio en máxima calidad y organiza los archivos en `~/musica/`.
 
-1. **Clona el repositorio**:
-   ```bash
-   git clone git@github.com:Zinko5/ytMusicDownloader.git
-   cd ytMusicDownloader
-   ```
-
-2. **Otorga permisos de ejecución**:
-   ```bash
-   chmod +x descargarPlaylist.sh compararPlaylist.sh
-   ```
-
----
-
-## 📖 Modo de Uso
-
-### 1. Descargando Música
-El script principal descarga el audio en máxima calidad (320kbps/V0) y organiza los archivos en carpetas dentro de `~/musica/`.
-
-**Sintaxis (Python - Recomendado):**
 ```bash
 python3 descargar_playlist.py "<URL_YOUTUBE_MUSIC>" "[nombre_carpeta]"
 ```
-
-**Sintaxis (Bash):**
-```bash
-./descargarPlaylist.sh "<URL_YOUTUBE_MUSIC>" "[nombre_carpeta]"
-```
-
-- **URL**: Puede ser una playlist o una canción individual.
-- **Nombre de carpeta** (opcional): Nombre del subdirectorio en `~/musica/`. Por defecto usa `na`.
-
-**Ejemplo:**
-```bash
-python3 descargar_playlist.py "https://music.youtube.com/playlist?list=XXX" "MisFavoritos"
-```
+- **URL**: Playlist o canción individual.
+- **Carpeta** (opcional): Nombre del subdirectorio. Por defecto usa `na`.
 
 ### 2. Comparando Biblioteca Local
-Si quieres saber qué canciones te faltan de una playlist o qué canciones tienes de más, usa el script de comparación.
+Compara qué canciones te faltan de una playlist o cuáles tienes de más.
 
-**Sintaxis (Python - Recomendado):**
 ```bash
 python3 comparar_playlist.py "<URL_YOUTUBE_MUSIC>" "[nombre_carpeta]"
-```
-
-**Sintaxis (Bash):**
-```bash
-./compararPlaylist.sh "<URL_YOUTUBE_MUSIC>" "[nombre_carpeta]"
-```
-
-**Ejemplo:**
-```bash
-./compararPlaylist.sh "https://music.youtube.com/playlist?list=XXX" "MisFavoritos"
 ```
 
 ---
 
 ## 📁 Estructura del Proyecto
 
-- `descargarPlaylist.sh`: Script de descarga avanzado con procesamiento de imágenes 1:1.
-- `compararPlaylist.sh`: Herramienta de auditoría de biblioteca.
-- `.gitignore`: Configurado para ignorar archivos temporales y descargas accidentales.
-- `README.md`: Esta documentación.
+- `descargar_playlist.py`: Script principal de descarga (Python).
+- `comparar_playlist.py`: Herramienta de auditoría (Python).
+- `bash/`: Contiene los scripts originales en Bash (`descargarPlaylist.sh`, `compararPlaylist.sh`) como alternativa secundaria.
+- `music.youtube.com_cookies.txt`: Archivo opcional de cookies para acceder a playlists privadas.
 
 ## 📝 Notas Técnicas
-- El script utiliza un **comentario de metadatos** especial (`video_id=...`) para rastrear el origen de cada archivo. Esto permite mover o renombrar los archivos sin que el script crea que debe descargarlos de nuevo.
-- **Uso de Cookies**: Si tienes un archivo `music.youtube.com_cookies.txt` en la carpeta del proyecto, el script lo usará automáticamente para acceder a tus playlists privadas.
-- Las portadas se procesan en `/tmp/` para no dejar residuos en tu carpeta de música.
+- **Caché de Metadatos**: Los scripts de Python generan un `.metadata_cache.json` en cada carpeta de música para acelerar exponencialmente las comparaciones futuras.
+- **Uso de Cookies**: Coloca tu `cookies.txt` o `music.youtube.com_cookies.txt` en la raíz del proyecto para acceder a contenido privado.
+- **Portadas**: Se procesan en `/tmp/` para mantener limpio el sistema.
 
 ---
 *Desarrollado para amantes de la música que prefieren tener su colección organizada offline.* 🎧
