@@ -20,6 +20,8 @@ FOLDER_NAME="${2:-na}"  # Default to 'na' if no folder name provided
 MUSIC_DIR="$HOME/musica/$FOLDER_NAME"
 TEMP_DIR="/tmp/yt-dlp-temp"
 MAX_RETRIES=3
+DEFAULT_ALBUM="Unknown Album"
+
 
 # Convert YouTube Music URL to YouTube URL
 URL="${URL//music.youtube.com/youtube.com}"
@@ -92,6 +94,7 @@ clean_filename() {
 process_video() {
     local video_url="$1"
     local attempt=1
+    local ZWP=$'\u200b'
 
     # Validate and fix URL
     video_url=$(validate_url "$video_url")
@@ -132,6 +135,14 @@ process_video() {
 
         # Extract title and clean it minimally for final filename
         title=$(echo "$metadata" | jq -r '.title')
+        artist=$(echo "$metadata" | jq -r '.artist // .uploader // "Unknown Artist"')
+        album=$(echo "$metadata" | jq -r ".album // \"$DEFAULT_ALBUM\"")
+
+        # Normalize to NFC to avoid issues with decomposed characters (NFD) on Android
+        title=$(python3 -c "import unicodedata, sys; print(unicodedata.normalize('NFC', sys.stdin.read().strip().lstrip('\u200b')))" <<< "$title")
+        artist=$(python3 -c "import unicodedata, sys; print(unicodedata.normalize('NFC', sys.stdin.read().strip().lstrip('\u200b')))" <<< "$artist")
+        album=$(python3 -c "import unicodedata, sys; print(unicodedata.normalize('NFC', sys.stdin.read().strip().lstrip('\u200b')))" <<< "$album")
+
         if [ -z "$title" ]; then
             errors+=("Unknown title ($video_url)")
             ((errored++))
@@ -206,13 +217,23 @@ process_video() {
             "$video_url" 2>/dev/null
 
         if [ $? -eq 0 ] && [ -f "$temp_output" ]; then
-            # Embed thumbnail as cover art
+            # Embed thumbnail as cover art and set explicit normalized tags
             if [ -f "$TEMP_DIR/$video_id_square.jpg" ]; then
                 ffmpeg -i "$temp_output" -i "$TEMP_DIR/$video_id_square.jpg" \
-                    -c copy -map 0 -map 1 -metadata:s:v title="Album cover" \
+                    -c copy -map 0 -map 1 \
+                    -metadata title="$ZWP$title" \
+                    -metadata artist="$ZWP$artist" \
+                    -metadata album="$ZWP$album" \
+                    -id3v2_version 3 \
+                    -metadata:s:v title="Album cover" \
                     -metadata:s:v comment="Cover (front)" "$output_file" -y 2>/dev/null
             else
-                mv "$temp_output" "$output_file"
+                # Even if no thumbnail, ensure tags are normalized and ID3v2.3
+                ffmpeg -i "$temp_output" -c copy \
+                    -metadata title="$ZWP$title" \
+                    -metadata artist="$ZWP$artist" \
+                    -metadata album="$ZWP$album" \
+                    -id3v2_version 3 "$output_file" -y 2>/dev/null
             fi
             if [ -f "$output_file" ]; then
                 echo "Descargada: $final_title"
@@ -246,6 +267,15 @@ process_video() {
 
 # Check if URL is a playlist or single video
 if [[ "$URL" =~ list= ]]; then
+    echo "Obteniendo información de la playlist..."
+    # Get playlist title and clean it
+    PLAYLIST_TITLE=$(yt-dlp --dump-single-json --flat-playlist --no-download "$URL" 2>/dev/null | jq -r '.title // empty')
+    if [ -n "$PLAYLIST_TITLE" ] && [ "$PLAYLIST_TITLE" != "null" ]; then
+        # Strip "Musicolet - " if present
+        DEFAULT_ALBUM="${PLAYLIST_TITLE#Musicolet - }"
+        echo "Álbum por defecto (de playlist): $DEFAULT_ALBUM"
+    fi
+
     # Get list of video URLs from playlist with verbose output and deduplicate
     video_urls=$(yt-dlp --get-id --flat-playlist --verbose "$URL" 2>/tmp/yt-dlp-verbose.log | sort -u | sed 's|^|https://youtube.com/watch?v=|')
     if [ -z "$video_urls" ]; then

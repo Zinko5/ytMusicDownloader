@@ -112,3 +112,27 @@ if [ ${#in_folder_not_playlist[@]} -gt 0 ]; then
         echo "- $name"
     done
 fi
+
+# Check for unnecessary numbering
+unnecessary_numbering=()
+for file in "$MUSIC_DIR"/*.mp3; do
+    if [ -f "$file" ]; then
+        filename=$(basename "$file" .mp3)
+        if [[ "$filename" =~ ^(.*)\ \(([0-9]+)\)$ ]]; then
+            base_name="${BASH_REMATCH[1]}"
+            # Case-insensitive check for the base file
+            base_exists=$(find "$MUSIC_DIR" -maxdepth 1 -iname "$base_name.mp3" | head -n 1)
+            if [ -z "$base_exists" ]; then
+                unnecessary_numbering+=("$filename")
+            fi
+        fi
+    fi
+done
+
+if [ ${#unnecessary_numbering[@]} -gt 0 ]; then
+    echo -e "\n⚠️  ATENCIÓN: Se detectaron ${#unnecessary_numbering[@]} archivos con ennumeración innecesaria:"
+    echo "   (Archivos con '(1)', '(2)', etc. donde el nombre base no existe)"
+    for name in "${unnecessary_numbering[@]}"; do
+        echo "- $name"
+    done
+fi
