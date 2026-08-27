@@ -1,7 +1,7 @@
 import sys
 from pathlib import Path
 sys.path.append(str(Path(__file__).parent.parent))
-from utiles.core import normalize_text
+from core import normalize_text
 
 test_str = "Te Quiero (…)"
 normalized = normalize_text(test_str)

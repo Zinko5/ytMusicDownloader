@@ -7,8 +7,8 @@ import sys
 import re
 from pathlib import Path
 
-# Add utiles to path
-from utiles.core import (
+# Add core to path
+from core import (
     normalize_text, 
     clean_filename, 
     extract_video_id, 
@@ -21,7 +21,10 @@ from utiles.core import (
     save_playlists,
     MUSIC_BASE_DIR, 
     TEMP_DIR,
-    COOKIES_FILE
+    COOKIES_FILE,
+    ZWP,
+    prepare_tag_value,
+    MetadataManager
 )
 
 # Local Constants
@@ -176,7 +179,7 @@ class MusicDownloader:
                 if use_cookies: cmd_dl.extend(['--cookies', str(COOKIES_FILE)])
                 subprocess.run(cmd_dl, capture_output=True, check=True)
                 
-                # 5. Embed metadata
+                # 5. Embed cover art
                 ffmpeg_cmd = ['ffmpeg', '-i', str(temp_output)]
                 if thumb_square.exists():
                     ffmpeg_cmd.extend(['-i', str(thumb_square)])
@@ -184,12 +187,15 @@ class MusicDownloader:
                 else:
                     map_args = ['-map', '0']
                 
-                ffmpeg_cmd.extend(['-id3v2_version', '3', '-c', 'copy'] + map_args + ['-metadata', f'title=\u200b{title}', '-metadata', f'artist=\u200b{artist}', '-metadata', f'album=\u200b{album}', '-metadata', f'comment=video_id={video_id}'])
+                ffmpeg_cmd.extend(['-c', 'copy'] + map_args)
                 if thumb_square.exists():
                     ffmpeg_cmd.extend(['-metadata:s:v', 'title=Album cover', '-metadata:s:v', 'comment=Cover (front)'])
                 
                 ffmpeg_cmd.extend([str(target_path), '-y'])
                 subprocess.run(ffmpeg_cmd, capture_output=True, check=True)
+                
+                # 6. Write clean tags using mutagen (UTF-16)
+                MetadataManager.update_tags(target_path, title=title, artist=artist, album=album, comment=f"video_id={video_id}")
                 
                 print(f"Descargada: {final_title}")
                 self.downloaded += 1
@@ -232,9 +238,24 @@ class MusicDownloader:
             dim = json.loads(probe.stdout).get('streams', [{}])[0]
             w, h = dim.get('width', 0), dim.get('height', 0)
             if w > 0 and h > 0:
-                if w == h: shutil.copy(str(thumb_file), str(thumb_square))
+                # Detect borders using cropdetect (just like the old bash script)
+                detect_crop = None
+                try:
+                    crop_probe = subprocess.run(
+                        ['ffmpeg', '-nostdin', '-i', str(thumb_file), '-vf', 'cropdetect=24:16:0:0', '-f', 'null', '-'],
+                        capture_output=True, text=True, timeout=5
+                    )
+                    crop_matches = re.findall(r'crop=(\d+:\d+:\d+:\d+)', crop_probe.stderr)
+                    if crop_matches:
+                        detect_crop = crop_matches[-1]
+                except Exception:
+                    pass
+
+                if w == h and not detect_crop:
+                    shutil.copy(str(thumb_file), str(thumb_square))
                 else:
-                    subprocess.run(['ffmpeg', '-i', str(thumb_file), '-vf', "crop='min(iw,ih)':'min(iw,ih)'", str(thumb_square), '-y'], capture_output=True)
+                    vf_filter = f"crop={detect_crop},crop='min(iw,ih)':'min(iw,ih)'" if detect_crop else "crop='min(iw,ih)':'min(iw,ih)'"
+                    subprocess.run(['ffmpeg', '-nostdin', '-i', str(thumb_file), '-vf', vf_filter, str(thumb_square), '-y'], capture_output=True)
 
     def print_summary(self):
         print(f"\nResumen para {self.music_dir.name}: {self.downloaded} OK, {self.skipped} omitidas, {self.errored} errores.")

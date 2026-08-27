@@ -28,3 +28,5 @@ __pycache__/
 # Sensitive data
 *cookies.txt
 .metadata_cache.json
+
+scratch/
